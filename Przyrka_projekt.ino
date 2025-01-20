@@ -6,6 +6,8 @@
 
 #define MAXBUF_REQUIREMENT 48
 #define DHT11PIN 6 
+#define SoftwareTX 4
+#define SoftwareRX 5
 
 #if (defined(I2C_BUFFER_LENGTH) &&                 \
      (I2C_BUFFER_LENGTH >= MAXBUF_REQUIREMENT)) || \
@@ -20,17 +22,16 @@ void setup() {
   while (!Serial1) {
         delay(100);
     }
-  Serial.begin(115200);
+  Serial.begin(9600);
     while (!Serial) {
         delay(100);
     }
+
     //sensirion
     Wire.begin();
 
     sen5x.begin(Wire);
-    Wire.begin();
-
-    sen5x.begin(Wire);
+ 
 
     uint16_t error;
     char errorMessage[256];
@@ -77,6 +78,9 @@ void setup() {
   }
 
     //winsen
+    byte qacommand[] = {0xFF, 0x01, 0x78, 0x04, 0x00, 0x00, 0x00, 0x83};
+    Serial1.write(qacommand,sizeof(qacommand));
+
 }
 
 void loop() {
@@ -84,7 +88,7 @@ void loop() {
   uint16_t error;
     char errorMessage[256];
 
-    delay(1000); //between mesurments
+    delay(2000); //between mesurments
 
     // Read Measurement
     float massConcentrationPm1p0;
@@ -95,36 +99,57 @@ void loop() {
     float ambientTemperature;
     float vocIndex;
     float noxIndex;
-
+    
     float Temperature;
     float Humidity;
+
+    const int numBytes = 9;       // Number of bytes to read
+    byte buffer[numBytes];
+    int bytesRead = 0;
 
     error = sen5x.readMeasuredValues( // pomiar sensirionem
         massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0,
         massConcentrationPm10p0, ambientHumidity, ambientTemperature, vocIndex,
         noxIndex);
-    
-    Temperature = (float)DHT11.temperature;
-    Humidity = (float)DHT11.humidity; 
-
-    
     if (error) {
-        Serial.print("Error trying to execute readMeasuredValues(): ");
-        errorToString(error, errorMessage, 256);
-        Serial.println(errorMessage);
+    Serial.print("Error trying to execute readMeasuredValues(): ");
+    errorToString(error, errorMessage, 256);
+    Serial.println(errorMessage);
         
     }
-
-  Serial.print("MassConcentrationPm1p0:");
+    
+    //dht 11
+    Temperature = (float)DHT11.temperature;
+    Humidity = (float)DHT11.humidity; 
+    //Winsen musi być w q/a mode bo się rozjeżdża
+    const byte qcommand[] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    Serial1.write(qcommand,sizeof(qcommand));
+    if (Serial1.available() > 0) {
+        Serial1.readBytes(buffer,numBytes);
+    }
+    
+    float resolution;
+    switch(buffer[5]){
+      case 0:
+        resolution = 1;
+      case 2:
+        resolution = 0.01;
+      case 1:
+        resolution = 0.1;
+    }
+    float wvalue;
+    wvalue = (buffer[2]*256+buffer[3])*resolution;
+  // wypis na port szeregowy
+  Serial.print("SensirionPm1p0:");
   Serial.print(massConcentrationPm1p0);
   Serial.print("\t");
-  Serial.print("MassConcentrationPm2p5:");
+  Serial.print("SensirionPm2p5:");
   Serial.print(massConcentrationPm2p5);
   Serial.print("\t");
-  Serial.print("MassConcentrationPm4p0:");
+  Serial.print("SensirionPm4p0:");
   Serial.print(massConcentrationPm4p0);
   Serial.print("\t");
-  Serial.print("MassConcentrationPm10p0:");
+  Serial.print("SensirionPm10p0:");
   Serial.print(massConcentrationPm10p0);
   Serial.print("\t");
   Serial.print("Humidity:");
@@ -133,6 +158,16 @@ void loop() {
   Serial.print("Temperature:");
   Serial.print(Temperature);
   Serial.print("\t");
+  Serial.print("NO2ppm:");
+  Serial.print(wvalue);
+  Serial.print("\t");
+  Serial.print("NO2ppmRes:");
+  Serial.print(resolution);
+  Serial.print("\t");
+  //for (int i = 0; i < numBytes; i++) {
+   //         Serial.print(buffer[i], HEX);
+    //        Serial.print(" ");
+   //     }
   Serial.print("\n");
   //if (isnan(ambientHumidity)) { //masa ifór ,sprawdzająca czy cokolwiek zmierzył dla temperatury i wilgotności ()
         //    Serial.print("n/a");
