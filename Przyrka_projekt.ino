@@ -1,22 +1,43 @@
+#include <LiquidCrystal_I2C.h>
 #include <dht11.h>
 #include <Arduino.h>
 #include <SensirionI2CSen5x.h>
 #include <Wire.h>
+#include "wiring_private.h"
+
 
 
 #define MAXBUF_REQUIREMENT 48
-#define DHT11PIN 6 
+#define DHT11PIN 5 
 #define SoftwareTX 4
 #define SoftwareRX 5
 
-#if (defined(I2C_BUFFER_LENGTH) &&                 \
+#if (defined(I2C_BUFFER_LENGTH) &&       \          
      (I2C_BUFFER_LENGTH >= MAXBUF_REQUIREMENT)) || \
     (defined(BUFFER_LENGTH) && BUFFER_LENGTH >= MAXBUF_REQUIREMENT)
 #define USE_PRODUCT_INFO
 #endif
+
+Uart Serial2(&sercom3, 7, 6, SERCOM_RX_PAD_3, UART_TX_PAD_2); // do gpsa
+void SERCOM3_Handler()
+{
+  Serial2.IrqHandler();
+}
+
 SensirionI2CSen5x sen5x;
 dht11 DHT11;
+
+LiquidCrystal_I2C lcd(0x27,20,4); 
 void setup() {
+  analogReadResolution(12);
+  lcd.init();
+  // Print a message to the LCD.
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("Initializing...");
+
+
+
   // put your setup code here, to run once:
   Serial1.begin(9600);
   while (!Serial1) {
@@ -26,6 +47,13 @@ void setup() {
     while (!Serial) {
         delay(100);
     }
+  Serial2.begin(9600);
+  while (!Serial2) {
+        delay(100);
+    }
+
+  pinPeripheral(7, PIO_SERCOM_ALT); // RX
+  pinPeripheral(6, PIO_SERCOM_ALT);  // TX
 
     //sensirion
     Wire.begin();
@@ -139,6 +167,13 @@ void loop() {
     }
     float wvalue;
     wvalue = (buffer[2]*256+buffer[3])*resolution;
+
+
+
+    // TGS
+    float value = analogRead(A0);
+    float readvalue = value*5/4096;
+
   // wypis na port szeregowy
   Serial.print("SensirionPm1p0:");
   Serial.print(massConcentrationPm1p0);
@@ -164,6 +199,12 @@ void loop() {
   Serial.print("NO2ppmRes:");
   Serial.print(resolution);
   Serial.print("\t");
+  Serial.print("TGSRs:");
+  Serial.print((5/readvalue -1)*500 );
+  Serial.print("\t");
+  Serial.print(readvalue);
+  Serial.print("\t");
+  Serial.print(Serial2.readStringUntil('\n'));
   //for (int i = 0; i < numBytes; i++) {
    //         Serial.print(buffer[i], HEX);
     //        Serial.print(" ");
