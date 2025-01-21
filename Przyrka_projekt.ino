@@ -20,6 +20,7 @@
 #endif
 TinyGPSPlus gps;
 Uart Serial2(&sercom3, 7, 6, SERCOM_RX_PAD_3, UART_TX_PAD_2); // do gpsa
+int displaymode = 0;
 void SERCOM3_Handler()
 {
   Serial2.IrqHandler();
@@ -35,7 +36,7 @@ void setup() {
   // Print a message to the LCD.
   lcd.backlight();
   lcd.setCursor(0,0);
-  lcd.print("Initializing...");
+  lcd.print("Inicjalizacja...");
 
 
 
@@ -110,6 +111,18 @@ void setup() {
     //winsen
     byte qacommand[] = {0xFF, 0x01, 0x78, 0x04, 0x00, 0x00, 0x00, 0x83};
     Serial1.write(qacommand,sizeof(qacommand));
+  // pierwszy pomiar gps
+  while (Serial2.available() > 0) {
+    char c = Serial2.read();
+    gps.encode(c);
+
+    // Check if both time and date have been updated
+    if (gps.time.isUpdated() && gps.date.isUpdated()) {
+      displayTimeAndDate();
+      break; // Stop execution after receiving the update
+    }
+  }
+  // Otawcie pliku, zapisanie nagłówka
 
 }
 
@@ -118,7 +131,7 @@ void loop() {
   uint16_t error;
     char errorMessage[256];
 
-    delay(2000); //between mesurments
+    delay(3000); //between mesurments
 
     // Read Measurement
     float massConcentrationPm1p0;
@@ -183,13 +196,12 @@ void loop() {
 
     // Check if both time and date have been updated
     if (gps.time.isUpdated() && gps.date.isUpdated()) {
-      Serial.println("\nTime and Date successfully updated!");
       displayTimeAndDate();
       break; // Stop execution after receiving the update
     }
   }
 
-  
+  updatelcd(massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0, massConcentrationPm10p0, wvalue, readvalue, Humidity, Temperature);
 
   // wypis na port szeregowy
   Serial.print("SensirionPm1p0:");
@@ -258,6 +270,52 @@ void loop() {
 
 }
 
+void updatelcd(float pm1p0 , float pm2p5, float pm4p0, float pm10p0,float win, float TGS, float humidity, float temp){
+  switch(displaymode){
+    case 0:
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("PM1.0: ");
+      lcd.print(pm1p0);
+      lcd.setCursor(0, 1);
+      lcd.print("PM2.5: ");
+      lcd.print(pm2p5);
+      displaymode++;
+      break;
+    case 1:
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("PM4.0: ");
+      lcd.print(pm4p0);
+      lcd.setCursor(0, 1);
+      lcd.print("PM10.0: ");
+      lcd.print(pm10p0);
+      displaymode++;
+      break;
+    case 2:
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("NO2 ppm: ");
+      lcd.print(win);
+      lcd.setCursor(0, 1);
+      lcd.print("TGS: ");
+      lcd.print(TGS);
+      displaymode++;
+      break;
+    case 3:
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Temp: ");
+      lcd.print(temp);
+      lcd.print(" C");
+      lcd.setCursor(0, 1);
+      lcd.print("HUM: ");
+      lcd.print(humidity);
+      lcd.print(" %");
+      displaymode = 0;
+      break;
+  }
+}
 
 void displayTimeAndDate() {
   Serial.print("Date: ");
