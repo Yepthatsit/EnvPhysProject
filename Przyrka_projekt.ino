@@ -4,20 +4,21 @@
 #include <SensirionI2CSen5x.h>
 #include <Wire.h>
 #include "wiring_private.h"
-
+#include <TinyGPS++.h>
 
 
 #define MAXBUF_REQUIREMENT 48
 #define DHT11PIN 5 
 #define SoftwareTX 4
 #define SoftwareRX 5
+#define SERIAL_RX_BUFFER_SIZE 256
 
 #if (defined(I2C_BUFFER_LENGTH) &&       \          
      (I2C_BUFFER_LENGTH >= MAXBUF_REQUIREMENT)) || \
     (defined(BUFFER_LENGTH) && BUFFER_LENGTH >= MAXBUF_REQUIREMENT)
 #define USE_PRODUCT_INFO
 #endif
-
+TinyGPSPlus gps;
 Uart Serial2(&sercom3, 7, 6, SERCOM_RX_PAD_3, UART_TX_PAD_2); // do gpsa
 void SERCOM3_Handler()
 {
@@ -39,7 +40,7 @@ void setup() {
 
 
   // put your setup code here, to run once:
-  Serial1.begin(9600);
+  Serial1.begin(115200);
   while (!Serial1) {
         delay(100);
     }
@@ -47,14 +48,15 @@ void setup() {
     while (!Serial) {
         delay(100);
     }
+    //GPS
   Serial2.begin(9600);
   while (!Serial2) {
         delay(100);
     }
+  
 
   pinPeripheral(7, PIO_SERCOM_ALT); // RX
   pinPeripheral(6, PIO_SERCOM_ALT);  // TX
-
     //sensirion
     Wire.begin();
 
@@ -174,6 +176,21 @@ void loop() {
     float value = analogRead(A0);
     float readvalue = value*5/4096;
 
+  // GPS
+  while (Serial2.available() > 0) {
+    char c = Serial2.read();
+    gps.encode(c);
+
+    // Check if both time and date have been updated
+    if (gps.time.isUpdated() && gps.date.isUpdated()) {
+      Serial.println("\nTime and Date successfully updated!");
+      displayTimeAndDate();
+      break; // Stop execution after receiving the update
+    }
+  }
+
+  
+
   // wypis na port szeregowy
   Serial.print("SensirionPm1p0:");
   Serial.print(massConcentrationPm1p0);
@@ -199,12 +216,12 @@ void loop() {
   Serial.print("NO2ppmRes:");
   Serial.print(resolution);
   Serial.print("\t");
-  Serial.print("TGSRs:");
-  Serial.print((5/readvalue -1)*500 );
-  Serial.print("\t");
+  Serial.print("TGS:");
+  //Serial.print((5/readvalue -1)*500 );
+  //Serial.print("\t");
   Serial.print(readvalue);
   Serial.print("\t");
-  Serial.print(Serial2.readStringUntil('\n'));
+  //Serial.print(Serial2.readStringUntil('\r\n'));
   //for (int i = 0; i < numBytes; i++) {
    //         Serial.print(buffer[i], HEX);
     //        Serial.print(" ");
@@ -239,4 +256,31 @@ void loop() {
 
         /// DHT 11 prawdopodobnie powyższe do wywalenia
 
+}
+
+
+void displayTimeAndDate() {
+  Serial.print("Date: ");
+  Serial.print(gps.date.month());
+  Serial.print("/");
+  Serial.print(gps.date.day());
+  Serial.print("/");
+  Serial.println(gps.date.year());
+
+  Serial.print("Time: ");
+  Serial.print(gps.time.hour());
+  Serial.print(":");
+  Serial.print(gps.time.minute());
+  Serial.print(":");
+  Serial.println(gps.time.second());
+  // Display Latitude and Longitude
+  Serial.print("Latitude: ");
+  Serial.print(gps.location.lat(), 6);  
+  Serial.print(", Longitude: ");
+  Serial.println(gps.location.lng(), 6);  
+
+    // Display Altitude
+  Serial.print("Altitude: ");
+  Serial.print(gps.altitude.meters());  
+  Serial.println(" meters");
 }
