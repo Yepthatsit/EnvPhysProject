@@ -5,12 +5,10 @@
 #include <Wire.h>
 #include "wiring_private.h"
 #include <TinyGPS++.h>
-
+#include <SD.h>
 
 #define MAXBUF_REQUIREMENT 48
 #define DHT11PIN 5 
-#define SoftwareTX 4
-#define SoftwareRX 5
 #define SERIAL_RX_BUFFER_SIZE 256
 
 #if (defined(I2C_BUFFER_LENGTH) &&       \          
@@ -18,6 +16,8 @@
     (defined(BUFFER_LENGTH) && BUFFER_LENGTH >= MAXBUF_REQUIREMENT)
 #define USE_PRODUCT_INFO
 #endif
+
+String Filename;
 TinyGPSPlus gps;
 Uart Serial2(&sercom3, 7, 6, SERCOM_RX_PAD_3, UART_TX_PAD_2); // do gpsa
 int displaymode = 0;
@@ -41,7 +41,7 @@ void setup() {
 
 
   // put your setup code here, to run once:
-  Serial1.begin(115200);
+  Serial1.begin(9600);
   while (!Serial1) {
         delay(100);
     }
@@ -111,19 +111,23 @@ void setup() {
     //winsen
     byte qacommand[] = {0xFF, 0x01, 0x78, 0x04, 0x00, 0x00, 0x00, 0x83};
     Serial1.write(qacommand,sizeof(qacommand));
-  // pierwszy pomiar gps
-  while (Serial2.available() > 0) {
-    char c = Serial2.read();
-    gps.encode(c);
-
-    // Check if both time and date have been updated
-    if (gps.time.isUpdated() && gps.date.isUpdated()) {
-      displayTimeAndDate();
-      break; // Stop execution after receiving the update
+    const byte qcommand[] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    Serial1.write(qcommand,sizeof(qcommand));
+    byte buffer[9];
+    if (Serial1.available() > 0) {
+        Serial1.readBytes(buffer,9);
     }
-  }
+  // pierwszy pomiar gps
   // Otawcie pliku, zapisanie nagłówka
-
+  if(SD.begin()){
+    Filename = createFileName();
+  //Serial.print(Filename);
+    File datafile = SD.open(Filename,FILE_WRITE);
+    datafile.println("Pm1p0,Pm2p5,Pm4p0,Pm10p0,NO2ppm,No2ppmRes,TGS,Humidity,Temperature,Lat,Long,Alt,TimeAndDate");
+    datafile.close();
+  }else{
+    Serial.println("Karta nie załadowana");
+  }
 }
 
 void loop() {
@@ -200,9 +204,8 @@ void loop() {
       break; // Stop execution after receiving the update
     }
   }
-
   updatelcd(massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0, massConcentrationPm10p0, wvalue, readvalue, Humidity, Temperature);
-
+  AddDataToFile(massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0, massConcentrationPm10p0, wvalue,resolution, readvalue, Humidity, Temperature);
   // wypis na port szeregowy
   Serial.print("SensirionPm1p0:");
   Serial.print(massConcentrationPm1p0);
@@ -235,9 +238,9 @@ void loop() {
   Serial.print("\t");
   //Serial.print(Serial2.readStringUntil('\r\n'));
   //for (int i = 0; i < numBytes; i++) {
-   //         Serial.print(buffer[i], HEX);
-    //        Serial.print(" ");
-   //     }
+  //          Serial.print(buffer[i], HEX);
+  //          Serial.print(" ");
+  //      }
   Serial.print("\n");
   //if (isnan(ambientHumidity)) { //masa ifór ,sprawdzająca czy cokolwiek zmierzył dla temperatury i wilgotności ()
         //    Serial.print("n/a");
@@ -341,4 +344,67 @@ void displayTimeAndDate() {
   Serial.print("Altitude: ");
   Serial.print(gps.altitude.meters());  
   Serial.println(" meters");
+}
+String createFileName() {
+  // Extract date components
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("TEST GPS");
+  delay(1000);
+  while (Serial2.available() > 0) {
+    char c = Serial2.read();
+    gps.encode(c);
+
+    // Check if both time and date have been updated
+    if (gps.time.isUpdated() && gps.date.isUpdated()) {
+      displayTimeAndDate();
+      break; // Stop execution after receiving the update
+    }
+  }
+  int month = gps.date.month();
+  int day = gps.date.day();
+  int year = gps.date.year();
+  
+  // Extract time components
+  int hour = gps.time.hour();
+  int minute = gps.time.minute();
+  int second = gps.time.second();
+  
+  // Create the full date string (formatted as MM/DD/YYYY)
+  String fullDate =    String(day) + String(month)   ;
+  
+  // Create the full time string (formatted as HH:MM:SS)
+  String fullTime = String(hour)  +  String(minute)  + String(second);
+  
+  // Create the final filename by concatenating all parts
+  String fileName = fullDate + fullTime  + String(".csv");
+  
+  return fileName;
+}
+//Pm1p0,Pm2p5,Pm4p0,Pm10p0,NO2ppm,No2ppmRes,TGS,Humidity,Temperature,Lat,Long,Alt,TimeAndDate
+void AddDataToFile(float pm1p0 , float pm2p5, float pm4p0, float pm10p0,float NO2ppm,float NO2ppmRes, float TGS, float humidity, float temp){
+  float sensorData[] = {pm1p0,pm2p5,pm4p0,pm10p0,NO2ppm,NO2ppmRes,TGS,humidity,temp};
+  String Dataline = String();
+  //int arraySize = sizeof(sensorData) / sizeof(sensorData[0]);
+  for (int i= 0; i<9;i++){
+    Dataline += String(sensorData[i]);
+    Dataline += ",";
+  }
+  float latitude = gps.location.lat();
+    float longitude = gps.location.lng();
+    float altitude = gps.altitude.meters();
+    String fullDate =  String(gps.date.day()) + "/" + String(gps.date.month()) + "/" + String(gps.date.year());
+    String fullTime = String(gps.time.hour()) + ":" + String(gps.time.minute()) + ":" + String(gps.time.second());
+
+    // Create a CSV formatted string
+    Dataline += String(latitude) + ",";  // Latitude
+    Dataline += String(longitude) + ",";       // Longitude
+    Dataline += String(altitude) + ",";        // Altitude
+    Dataline += fullDate + "-";                // Date
+    Dataline += fullTime  ;
+    File file = SD.open(Filename,FILE_WRITE);
+    file.println(Dataline);
+    file.close();
+  
+
 }
