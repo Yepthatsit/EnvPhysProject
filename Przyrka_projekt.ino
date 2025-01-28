@@ -119,9 +119,11 @@ void setup() {
   if(SD.begin()){
     Filename = createFileName();
   //Serial.print(Filename);
-    File datafile = SD.open(Filename,FILE_WRITE);
-    datafile.println("Pm1p0,Pm2p5,Pm4p0,Pm10p0,NO2ppm,No2ppmRes,TGS,Humidity,Temperature,Lat,Long,Alt,TimeAndDate");
-    datafile.close();
+    if(!SD.exists(Filename)){
+      File datafile = SD.open(Filename,FILE_WRITE);
+      datafile.println("Pm1p0,Pm2p5,Pm4p0,Pm10p0,NO2ppm,No2ppmRes,TGS,Humidity,Temperature,Lat,Long,Alt,TimeAndDate");
+      datafile.close();
+    }
   }else{
     Serial.println("Karta nie załadowana");
   }
@@ -231,9 +233,9 @@ void loop() {
   Serial.print(resolution,4);
   Serial.print("\t");
   Serial.print("TGS:");
-  //Serial.print((5/readvalue -1)*500 );
+  Serial.print((5/readvalue -1)*500 );
   //Serial.print("\t");
-  Serial.print(readvalue,4);
+  //Serial.print(readvalue,4);
   Serial.print("\t");
   //Serial.print(Serial2.readStringUntil('\r\n'));
   //for (int i = 0; i < numBytes; i++) {
