@@ -46,9 +46,6 @@ void setup() {
         delay(100);
     }
   Serial.begin(9600);
-    while (!Serial) {
-        delay(100);
-    }
     //GPS
   Serial2.begin(9600);
   while (!Serial2) {
@@ -197,11 +194,13 @@ void loop() {
   while (Serial2.available() > 0) {
     char c = Serial2.read();
     gps.encode(c);
-
+    Serial.print(c);
     // Check if both time and date have been updated
     if (gps.time.isUpdated() && gps.date.isUpdated()) {
+      Serial.print("\n");
       displayTimeAndDate();
       break; // Stop execution after receiving the update
+      
     }
   }
   updatelcd(massConcentrationPm1p0, massConcentrationPm2p5, massConcentrationPm4p0, massConcentrationPm10p0, wvalue, readvalue, Humidity, Temperature);
@@ -229,12 +228,12 @@ void loop() {
   Serial.print(wvalue);
   Serial.print("\t");
   Serial.print("NO2ppmRes:");
-  Serial.print(resolution);
+  Serial.print(resolution,4);
   Serial.print("\t");
   Serial.print("TGS:");
   //Serial.print((5/readvalue -1)*500 );
   //Serial.print("\t");
-  Serial.print(readvalue);
+  Serial.print(readvalue,4);
   Serial.print("\t");
   //Serial.print(Serial2.readStringUntil('\r\n'));
   //for (int i = 0; i < numBytes; i++) {
@@ -370,16 +369,20 @@ String createFileName() {
   int minute = gps.time.minute();
   int second = gps.time.second();
   
-  // Create the full date string (formatted as MM/DD/YYYY)
-  String fullDate =    String(day) + String(month)   ;
+    // Format date as DDMM
+  String datePart = padZero(String(day)) + padZero(String(month));
+
+  // Format time as mm
+  String timePart = padZero(String(minute));
+
+  // Generate a random 2-character suffix for uniqueness
+  String suffix = getRandomSuffix();
+
+  // Create the final filename
+  String filename = datePart + timePart + suffix + ".csv";
+
+  return filename;
   
-  // Create the full time string (formatted as HH:MM:SS)
-  String fullTime = String(hour)  +  String(minute)  + String(second);
-  
-  // Create the final filename by concatenating all parts
-  String fileName = fullDate + fullTime  + String(".csv");
-  
-  return fileName;
 }
 //Pm1p0,Pm2p5,Pm4p0,Pm10p0,NO2ppm,No2ppmRes,TGS,Humidity,Temperature,Lat,Long,Alt,TimeAndDate
 void AddDataToFile(float pm1p0 , float pm2p5, float pm4p0, float pm10p0,float NO2ppm,float NO2ppmRes, float TGS, float humidity, float temp){
@@ -387,7 +390,7 @@ void AddDataToFile(float pm1p0 , float pm2p5, float pm4p0, float pm10p0,float NO
   String Dataline = String();
   //int arraySize = sizeof(sensorData) / sizeof(sensorData[0]);
   for (int i= 0; i<9;i++){
-    Dataline += String(sensorData[i]);
+    Dataline += String(sensorData[i],4);
     Dataline += ",";
   }
   float latitude = gps.location.lat();
@@ -405,6 +408,16 @@ void AddDataToFile(float pm1p0 , float pm2p5, float pm4p0, float pm10p0,float NO
     File file = SD.open(Filename,FILE_WRITE);
     file.println(Dataline);
     file.close();
-  
 
+}
+String getRandomSuffix() {
+  randomSeed(analogRead(A0) + millis()); // Seed the random generator
+  char suffix[3];
+  sprintf(suffix, "%02X", random(0, 256)); // Generate hexadecimal suffix (00 to FF)
+  return String(suffix);
+}
+
+// Helper to pad single-digit numbers with a leading zero
+String padZero(String input) {
+  return (input.length() < 2) ? "0" + input : input;
 }
